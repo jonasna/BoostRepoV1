@@ -3,20 +3,23 @@
 #include <vector>
 #include <string>
 
-using boost::asio::ip::tcp;
+namespace asio = boost::asio::ip;
 
 class file_server
 {
 public:
 	file_server(boost::asio::io_service& io_service, unsigned short port, std::string address);
-	void start_handle() const;
+	void listen() const;
+
 private:
 
-	mutable tcp::acceptor tcp_acceptor_;
+	mutable asio::tcp::acceptor tcp_acceptor_;
 
-	static void client_session_handler(tcp::socket sock);
+	static void client_session_handler(asio::tcp::socket sock);
 
-	static std::string read_client(tcp::socket& client_sock, unsigned long& bytes_read);
-	static unsigned long write_client(tcp::socket& client_sock, const std::string& msg);
-	static unsigned long write_client(tcp::socket& client_sock, const std::vector<char>& buf, unsigned long count);
+	static std::string read_client(asio::tcp::socket& client_sock, unsigned long& bytes_read);
+
+	static unsigned long write_client(asio::tcp::socket& client_sock, const std::string& msg);
+	static unsigned long write_client(asio::tcp::socket& client_sock, const std::vector<char>& buf);
+	static unsigned long write_client(asio::tcp::socket& client_sock, const char* buf, unsigned long count);
 };

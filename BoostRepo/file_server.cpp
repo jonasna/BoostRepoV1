@@ -1,16 +1,18 @@
 ﻿#include "file_server.h"
+#include "f_section_reader.h"
 #include <thread>
 #include <iostream>
 
-using namespace boost::asio;
 
+using namespace boost::asio;
+using ip::tcp;
 
 file_server::file_server(io_service & io_service, unsigned short port, std::string address)
 	: tcp_acceptor_(io_service, tcp::endpoint(ip::address_v4::from_string(address), port))
 {
 }
 
-void file_server::start_handle() const
+void file_server::listen() const
 {
 	for(;;)
 	{
@@ -22,11 +24,25 @@ void file_server::client_session_handler(tcp::socket sock)
 {
 	try
 	{
-		std::vector<char> lol{ 'H', 'e', 'j', '\n' };
-		write_client(sock, lol, 4);
 		unsigned long count;
-		std::cout << read_client(sock, count) << std::endl;
+		auto file_name = read_client(sock, count);
 
+		f_section_reader file_handle(file_name, 1000);
+
+		auto file_size = file_handle.get_file_size();
+
+		write_client(sock, std::to_string(file_size));
+
+		if(file_handle.get_is_valid())
+		{
+			while(file_handle.get_remaining_bytes())
+			{
+				write_client(sock, file_handle.get_next_section());
+			}
+		}
+
+		sock.shutdown(sock.shutdown_both);
+		
 	}catch(std::exception& e)
 	{
 		std::cerr << "Error in thread: " << e.what() << std::endl;
@@ -45,17 +61,16 @@ std::string file_server::read_client(tcp::socket& client_sock, unsigned long& by
 
 unsigned long file_server::write_client(tcp::socket& client_sock, const std::string& msg)
 {
-	streambuf write_buffer;
-	std::ostream output(&write_buffer);
-	output << msg + '\n';
-	return static_cast<unsigned long>(write(client_sock, write_buffer));
+	return write_client(client_sock, std::string(msg + '\0').c_str(), msg.length() + 1);
 }
 
-
-unsigned long file_server::write_client(tcp::socket& client_sock, const std::vector<char>& buf, unsigned long count)
+unsigned long file_server::write_client(tcp::socket& client_sock, const std::vector<char>& buf)
 {
-	streambuf write_buffer;
-	std::ostream output(&write_buffer);
-	output.write(buf.data(), count);
-	return static_cast<unsigned long>(write(client_sock, write_buffer));
+	return write_client(client_sock, buf.data(), buf.size());
+}
+
+unsigned long file_server::write_client(tcp::socket& client_sock, const char* buf, unsigned long count)
+{
+	const const_buffer write_buf = buffer(buf, count);
+	return static_cast<unsigned long>(write(client_sock, write_buf));
 }
